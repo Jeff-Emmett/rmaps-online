@@ -8,9 +8,9 @@ interface UseLocationSharingOptions {
   updateInterval?: number;
   /** Enable high accuracy mode (uses more battery) */
   highAccuracy?: boolean;
-  /** Maximum age of cached position in ms (default: 10000) */
+  /** Maximum age of cached position in ms (default: 30000) */
   maxAge?: number;
-  /** Timeout for position request in ms (default: 10000) */
+  /** Timeout for position request in ms (default: 30000) */
   timeout?: number;
 }
 
@@ -38,8 +38,8 @@ export function useLocationSharing(
     onLocationUpdate,
     updateInterval = 5000,
     highAccuracy = true,
-    maxAge = 10000,
-    timeout = 10000,
+    maxAge = 30000,
+    timeout = 30000,
   } = options;
 
   const [isSharing, setIsSharing] = useState(false);
@@ -92,7 +92,9 @@ export function useLocationSharing(
 
   const handleError = useCallback((err: GeolocationPositionError) => {
     setError(err);
-    console.error('Geolocation error:', err.message);
+    // Only log as warning, not error - timeouts are common indoors
+    console.warn('Geolocation warning:', err.message, '(code:', err.code, ')');
+    // Don't stop sharing on errors - keep trying
   }, []);
 
   const startSharing = useCallback(() => {
