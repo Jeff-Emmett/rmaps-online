@@ -12,6 +12,8 @@ interface MapViewProps {
   initialViewport?: MapViewport;
   onParticipantClick?: (participant: Participant) => void;
   onMapClick?: (lngLat: { lng: number; lat: number }) => void;
+  /** Auto-center on current user's location when first available */
+  autoCenterOnUser?: boolean;
 }
 
 // Default to Hamburg CCH area for CCC events
@@ -26,11 +28,13 @@ export default function MapView({
   initialViewport = DEFAULT_VIEWPORT,
   onParticipantClick,
   onMapClick,
+  autoCenterOnUser = true,
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   const [mapLoaded, setMapLoaded] = useState(false);
+  const hasCenteredOnUserRef = useRef(false);
 
   // Initialize map
   useEffect(() => {
@@ -153,7 +157,20 @@ export default function MapView({
       // Add accuracy circle if available
       // TODO: Implement accuracy circles as a layer
     });
-  }, [participants, mapLoaded, currentUserId, onParticipantClick]);
+
+    // Auto-center on current user's first location
+    if (autoCenterOnUser && !hasCenteredOnUserRef.current && currentUserId) {
+      const currentUser = participants.find(p => p.id === currentUserId);
+      if (currentUser?.location && map.current) {
+        console.log('Auto-centering on user location:', currentUser.location.latitude, currentUser.location.longitude);
+        map.current.flyTo({
+          center: [currentUser.location.longitude, currentUser.location.latitude],
+          zoom: 16,
+        });
+        hasCenteredOnUserRef.current = true;
+      }
+    }
+  }, [participants, mapLoaded, currentUserId, onParticipantClick, autoCenterOnUser]);
 
   // Fit bounds to show all participants
   const fitToParticipants = () => {

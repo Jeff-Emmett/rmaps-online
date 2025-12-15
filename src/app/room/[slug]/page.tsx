@@ -96,9 +96,21 @@ export default function RoomPage() {
   // Auto-start location sharing when connected
   useEffect(() => {
     if (isConnected && currentUser && !isSharing) {
+      console.log('Auto-starting location sharing');
       startSharing();
     }
   }, [isConnected, currentUser, isSharing, startSharing]);
+
+  // Track if we've centered on user's location yet
+  const hasCenteredRef = useRef(false);
+
+  // Log when we get location updates
+  useEffect(() => {
+    if (currentLocation && !hasCenteredRef.current) {
+      console.log('First location acquired:', currentLocation.latitude, currentLocation.longitude);
+      hasCenteredRef.current = true;
+    }
+  }, [currentLocation]);
 
   // Update status when app goes to background
   useEffect(() => {
