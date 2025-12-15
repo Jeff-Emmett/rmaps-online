@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
-import type { Participant, MapViewport } from '@/types';
+import type { Participant, MapViewport, Waypoint } from '@/types';
 import { isInC3NavArea } from '@/lib/c3nav';
 
 // Dynamic imports to avoid SSR issues
@@ -28,11 +28,13 @@ type MapMode = 'outdoor' | 'indoor' | 'auto';
 
 interface DualMapViewProps {
   participants: Participant[];
+  waypoints?: Waypoint[];
   currentUserId?: string;
   currentLocation?: { latitude: number; longitude: number } | null;
   eventId?: string;
   initialMode?: MapMode;
   onParticipantClick?: (participant: Participant) => void;
+  onWaypointClick?: (waypoint: Waypoint) => void;
 }
 
 // CCC venue bounds (Hamburg Congress Center)
@@ -45,11 +47,13 @@ const CCC_BOUNDS = {
 
 export default function DualMapView({
   participants,
+  waypoints = [],
   currentUserId,
   currentLocation,
   eventId = '38c3',
   initialMode = 'auto',
   onParticipantClick,
+  onWaypointClick,
 }: DualMapViewProps) {
   const [mode, setMode] = useState<MapMode>(initialMode);
   const [activeView, setActiveView] = useState<'outdoor' | 'indoor'>('outdoor');
@@ -86,8 +90,10 @@ export default function DualMapView({
       {activeView === 'outdoor' ? (
         <MapView
           participants={participants}
+          waypoints={waypoints}
           currentUserId={currentUserId}
           onParticipantClick={onParticipantClick}
+          onWaypointClick={onWaypointClick}
         />
       ) : (
         <C3NavEmbed
@@ -103,7 +109,7 @@ export default function DualMapView({
       {activeView === 'outdoor' && (
         <button
           onClick={goIndoor}
-          className="absolute bottom-4 left-4 bg-rmaps-dark/90 text-white px-3 py-2 rounded-lg text-sm hover:bg-rmaps-dark transition-colors flex items-center gap-2 z-10"
+          className="absolute bottom-4 left-4 bg-rmaps-dark/90 text-white px-3 py-2 rounded-lg text-sm hover:bg-rmaps-dark transition-colors flex items-center gap-2 z-30"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -126,7 +132,7 @@ export default function DualMapView({
 
       {/* Venue proximity indicator */}
       {currentLocation && isInC3NavArea(currentLocation.latitude, currentLocation.longitude) && activeView === 'outdoor' && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-rmaps-secondary/90 text-white text-sm px-3 py-1.5 rounded-full flex items-center gap-2 z-10">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-rmaps-secondary/90 text-white text-sm px-3 py-1.5 rounded-full flex items-center gap-2 z-30">
           <span>You&apos;re at the venue!</span>
           <button onClick={goIndoor} className="underline">
             Switch to indoor

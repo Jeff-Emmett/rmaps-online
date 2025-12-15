@@ -3,14 +3,16 @@
 import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import type { Participant, MapViewport } from '@/types';
+import type { Participant, MapViewport, Waypoint } from '@/types';
 import FriendMarker from './FriendMarker';
 
 interface MapViewProps {
   participants: Participant[];
+  waypoints?: Waypoint[];
   currentUserId?: string;
   initialViewport?: MapViewport;
   onParticipantClick?: (participant: Participant) => void;
+  onWaypointClick?: (waypoint: Waypoint) => void;
   onMapClick?: (lngLat: { lng: number; lat: number }) => void;
   /** Auto-center on current user's location when first available */
   autoCenterOnUser?: boolean;
@@ -24,15 +26,18 @@ const DEFAULT_VIEWPORT: MapViewport = {
 
 export default function MapView({
   participants,
+  waypoints = [],
   currentUserId,
   initialViewport = DEFAULT_VIEWPORT,
   onParticipantClick,
+  onWaypointClick,
   onMapClick,
   autoCenterOnUser = true,
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const waypointMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   const [mapLoaded, setMapLoaded] = useState(false);
   const hasCenteredOnUserRef = useRef(false);
 
@@ -47,13 +52,15 @@ export default function MapView({
         sources: {
           osm: {
             type: 'raster',
+            // Use Carto's basemaps - more reliable than direct OSM tiles
             tiles: [
-              'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-              'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
-              'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+              'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+              'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+              'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+              'https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
             ],
             tileSize: 256,
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
           },
         },
         layers: [
@@ -62,7 +69,7 @@ export default function MapView({
             type: 'raster',
             source: 'osm',
             minzoom: 0,
-            maxzoom: 19,
+            maxzoom: 20,
           },
         ],
       },
@@ -171,6 +178,94 @@ export default function MapView({
       }
     }
   }, [participants, mapLoaded, currentUserId, onParticipantClick, autoCenterOnUser]);
+
+  // Update waypoint markers
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    const currentWaypointMarkers = waypointMarkersRef.current;
+    const waypointIds = new Set(waypoints.map((w) => w.id));
+
+    // Remove markers for deleted waypoints
+    currentWaypointMarkers.forEach((marker, id) => {
+      if (!waypointIds.has(id)) {
+        marker.remove();
+        currentWaypointMarkers.delete(id);
+      }
+    });
+
+    // Add/update waypoint markers
+    waypoints.forEach((waypoint) => {
+      const { latitude, longitude } = waypoint.location;
+      let marker = currentWaypointMarkers.get(waypoint.id);
+
+      if (marker) {
+        // Update position if changed
+        marker.setLngLat([longitude, latitude]);
+      } else {
+        // Create new waypoint marker
+        const el = document.createElement('div');
+        el.className = 'waypoint-marker';
+        el.innerHTML = `
+          <div class="waypoint-icon">${waypoint.emoji || '📍'}</div>
+          <div class="waypoint-label">${waypoint.name}</div>
+        `;
+        el.style.cssText = `
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          cursor: pointer;
+        `;
+
+        const iconDiv = el.querySelector('.waypoint-icon') as HTMLElement;
+        if (iconDiv) {
+          iconDiv.style.cssText = `
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          `;
+          const innerSpan = document.createElement('span');
+          innerSpan.style.cssText = 'transform: rotate(45deg); font-size: 14px;';
+          innerSpan.textContent = waypoint.emoji || '📍';
+          iconDiv.innerHTML = '';
+          iconDiv.appendChild(innerSpan);
+        }
+
+        const labelDiv = el.querySelector('.waypoint-label') as HTMLElement;
+        if (labelDiv) {
+          labelDiv.style.cssText = `
+            background: rgba(0,0,0,0.8);
+            color: white;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-top: 4px;
+            white-space: nowrap;
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          `;
+        }
+
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onWaypointClick?.(waypoint);
+        });
+
+        marker = new maplibregl.Marker({ element: el })
+          .setLngLat([longitude, latitude])
+          .addTo(map.current!);
+
+        currentWaypointMarkers.set(waypoint.id, marker);
+      }
+    });
+  }, [waypoints, mapLoaded, onWaypointClick]);
 
   // Fit bounds to show all participants
   const fitToParticipants = () => {

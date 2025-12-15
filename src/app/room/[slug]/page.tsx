@@ -8,6 +8,7 @@ import { useLocationSharing } from '@/hooks/useLocationSharing';
 import ParticipantList from '@/components/room/ParticipantList';
 import RoomHeader from '@/components/room/RoomHeader';
 import ShareModal from '@/components/room/ShareModal';
+import MeetingPointModal from '@/components/room/MeetingPointModal';
 import type { Participant, ParticipantLocation } from '@/types';
 
 // Dynamic import for map to avoid SSR issues with MapLibre
@@ -27,6 +28,7 @@ export default function RoomPage() {
 
   const [showShare, setShowShare] = useState(false);
   const [showParticipants, setShowParticipants] = useState(true);
+  const [showMeetingPoint, setShowMeetingPoint] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ name: string; emoji: string } | null>(null);
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
 
@@ -201,12 +203,16 @@ export default function RoomPage() {
         {/* Map */}
         <DualMapView
           participants={participants}
+          waypoints={waypoints}
           currentUserId={currentParticipantId || undefined}
           currentLocation={currentLocation}
           eventId="38c3"
           onParticipantClick={(p) => {
             setSelectedParticipant(p);
             setShowParticipants(true);
+          }}
+          onWaypointClick={(w) => {
+            console.log('Waypoint clicked:', w.name);
           }}
         />
 
@@ -218,6 +224,7 @@ export default function RoomPage() {
               currentUserId={currentUser.name}
               onClose={() => setShowParticipants(false)}
               onNavigateTo={handleNavigateTo}
+              onSetMeetingPoint={() => setShowMeetingPoint(true)}
             />
           </div>
         )}
@@ -233,6 +240,18 @@ export default function RoomPage() {
       {/* Share Modal */}
       {showShare && (
         <ShareModal roomSlug={slug} onClose={() => setShowShare(false)} />
+      )}
+
+      {/* Meeting Point Modal */}
+      {showMeetingPoint && (
+        <MeetingPointModal
+          currentLocation={currentLocation}
+          onClose={() => setShowMeetingPoint(false)}
+          onSetMeetingPoint={(waypoint) => {
+            addWaypoint(waypoint);
+            setShowMeetingPoint(false);
+          }}
+        />
       )}
     </div>
   );

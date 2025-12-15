@@ -7,6 +7,7 @@ interface ParticipantListProps {
   currentUserId?: string;
   onClose: () => void;
   onNavigateTo: (participant: Participant) => void;
+  onSetMeetingPoint?: () => void;
 }
 
 export default function ParticipantList({
@@ -14,6 +15,7 @@ export default function ParticipantList({
   currentUserId,
   onClose,
   onNavigateTo,
+  onSetMeetingPoint,
 }: ParticipantListProps) {
   const formatDistance = (participant: Participant, current: Participant | undefined) => {
     if (!participant.location || !current?.location) return null;
@@ -142,7 +144,10 @@ export default function ParticipantList({
 
       {/* Footer actions */}
       <div className="p-4 border-t border-white/10">
-        <button className="btn-secondary w-full text-sm">
+        <button
+          className="btn-secondary w-full text-sm"
+          onClick={onSetMeetingPoint}
+        >
           Set Meeting Point
         </button>
       </div>
