@@ -42,6 +42,7 @@ interface UseRoomReturn {
   currentParticipantId: string | null;
   roomName: string;
   updateLocation: (location: ParticipantLocation) => void;
+  clearLocation: () => void;
   setStatus: (status: Participant['status']) => void;
   addWaypoint: (waypoint: Omit<Waypoint, 'id' | 'createdAt' | 'createdBy'>) => void;
   removeWaypoint: (waypointId: string) => void;
@@ -136,6 +137,12 @@ export function useRoom({ slug, userName, userEmoji }: UseRoomOptions): UseRoomR
     syncRef.current.updateLocation(locationState);
   }, []);
 
+  // Clear location (when user stops sharing)
+  const clearLocation = useCallback(() => {
+    if (!syncRef.current) return;
+    syncRef.current.clearLocation();
+  }, []);
+
   // Set status
   const setStatus = useCallback((status: Participant['status']) => {
     if (!syncRef.current) return;
@@ -187,6 +194,7 @@ export function useRoom({ slug, userName, userEmoji }: UseRoomOptions): UseRoomR
     currentParticipantId: participantIdRef.current,
     roomName,
     updateLocation,
+    clearLocation,
     setStatus,
     addWaypoint,
     removeWaypoint,

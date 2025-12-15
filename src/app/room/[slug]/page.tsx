@@ -51,6 +51,7 @@ export default function RoomPage() {
     currentParticipantId,
     roomName,
     updateLocation,
+    clearLocation,
     setStatus,
     addWaypoint,
     removeWaypoint,
@@ -93,16 +94,18 @@ export default function RoomPage() {
     highAccuracy: true,
   });
 
-  // Auto-start location sharing when connected (only once)
-  const hasAutoStartedRef = useRef(false);
-
-  useEffect(() => {
-    if (isConnected && currentUser && !hasAutoStartedRef.current) {
-      console.log('Auto-starting location sharing (first time)');
-      hasAutoStartedRef.current = true;
+  // Location sharing is opt-in - user must click to start
+  // Handler for toggling location sharing
+  const handleToggleSharing = useCallback(() => {
+    if (isSharing) {
+      console.log('Stopping location sharing and clearing location');
+      stopSharing();
+      clearLocation();
+    } else {
+      console.log('Starting location sharing');
       startSharing();
     }
-  }, [isConnected, currentUser, startSharing]);
+  }, [isSharing, startSharing, stopSharing, clearLocation]);
 
   // Track if we've centered on user's location yet
   const hasCenteredRef = useRef(false);
@@ -188,7 +191,7 @@ export default function RoomPage() {
         roomSlug={slug}
         participantCount={participants.length}
         isSharing={isSharing}
-        onToggleSharing={() => (isSharing ? stopSharing() : startSharing())}
+        onToggleSharing={handleToggleSharing}
         onShare={() => setShowShare(true)}
         onToggleParticipants={() => setShowParticipants(!showParticipants)}
       />

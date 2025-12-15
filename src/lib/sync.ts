@@ -281,6 +281,18 @@ export class RoomSync {
     }
   }
 
+  clearLocation(): void {
+    console.log('RoomSync.clearLocation called');
+    if (this.state.participants[this.participantId]) {
+      delete this.state.participants[this.participantId].location;
+      this.state.participants[this.participantId].lastSeen = new Date().toISOString();
+      // Broadcast a null location to clear it for other participants
+      this.send({ type: 'location', participantId: this.participantId, location: null as any });
+      console.log('Location cleared for participant:', this.participantId);
+      this.notifyStateChange();
+    }
+  }
+
   updateStatus(status: string): void {
     if (this.state.participants[this.participantId]) {
       this.state.participants[this.participantId].status = status;
