@@ -8,7 +8,7 @@ interface UseLocationSharingOptions {
   updateInterval?: number;
   /** Enable high accuracy mode (uses more battery) */
   highAccuracy?: boolean;
-  /** Maximum age of cached position in ms (default: 30000) */
+  /** Maximum age of cached position in ms (default: 5000) - lower = fresher positions */
   maxAge?: number;
   /** Timeout for position request in ms (default: 30000) */
   timeout?: number;
@@ -38,7 +38,7 @@ export function useLocationSharing(
     onLocationUpdate,
     updateInterval = 5000,
     highAccuracy = true,
-    maxAge = 30000,
+    maxAge = 5000,  // Allow cached position up to 5 seconds old
     timeout = 30000,
   } = options;
 
