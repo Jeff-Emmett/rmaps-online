@@ -1,18 +1,16 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { DocHandle } from '@automerge/automerge-repo';
 import { nanoid } from 'nanoid';
 import {
-  findOrCreateRoom,
-  addParticipant,
-  removeParticipant,
-  updateParticipantLocation,
-  updateParticipantStatus,
-  addWaypoint as addWaypointToDoc,
-  removeWaypoint as removeWaypointFromDoc,
-  type RoomDocument,
-} from '@/lib/automerge';
+  RoomSync,
+  stateToParticipant,
+  stateToWaypoint,
+  type ParticipantState,
+  type LocationState,
+  type WaypointState,
+  type RoomState,
+} from '@/lib/sync';
 import type { Participant, ParticipantLocation, Waypoint } from '@/types';
 
 // Color palette for participants
@@ -58,138 +56,72 @@ export function useRoom({ slug, userName, userEmoji }: UseRoomOptions): UseRoomR
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const [roomName, setRoomName] = useState(slug);
 
-  const handleRef = useRef<DocHandle<RoomDocument> | null>(null);
-  const participantIdRef = useRef<string | null>(null);
+  const syncRef = useRef<RoomSync | null>(null);
+  const participantIdRef = useRef<string>(nanoid());
 
-  // Convert document participants to typed Participant array
-  const docToParticipants = useCallback((doc: RoomDocument): Participant[] => {
-    return Object.values(doc.participants).map((p) => ({
-      id: p.id,
-      name: p.name,
-      emoji: p.emoji,
-      color: p.color,
-      joinedAt: new Date(p.joinedAt),
-      lastSeen: new Date(p.lastSeen),
-      status: p.status as Participant['status'],
-      location: p.location
-        ? {
-            ...p.location,
-            timestamp: new Date(p.location.timestamp),
-            source: p.location.source as ParticipantLocation['source'],
-          }
-        : undefined,
-      privacySettings: {
-        ...p.privacySettings,
-        defaultPrecision: p.privacySettings.defaultPrecision as Participant['privacySettings']['defaultPrecision'],
-      },
-    }));
-  }, []);
+  // Handle state updates from sync
+  const handleStateChange = useCallback((state: RoomState) => {
+    setParticipants(Object.values(state.participants).map(stateToParticipant));
+    setWaypoints(state.waypoints.map(stateToWaypoint));
+    setRoomName(state.name || slug);
+  }, [slug]);
 
-  // Convert document waypoints to typed Waypoint array
-  const docToWaypoints = useCallback((doc: RoomDocument): Waypoint[] => {
-    return doc.waypoints.map((w) => ({
-      id: w.id,
-      name: w.name,
-      emoji: w.emoji,
-      location: {
-        latitude: w.location.latitude,
-        longitude: w.location.longitude,
-        indoor: w.location.indoor,
-      },
-      createdBy: w.createdBy,
-      createdAt: new Date(w.createdAt),
-      type: w.type as Waypoint['type'],
-    }));
+  // Handle connection changes
+  const handleConnectionChange = useCallback((connected: boolean) => {
+    setIsConnected(connected);
   }, []);
 
   // Initialize room connection
   useEffect(() => {
-    let mounted = true;
+    if (!userName) return;
 
-    async function init() {
-      try {
-        setIsLoading(true);
-        setError(null);
+    setIsLoading(true);
+    setError(null);
 
-        const participantId = nanoid();
-        participantIdRef.current = participantId;
+    const participantId = participantIdRef.current;
+    const color = COLORS[Math.floor(Math.random() * COLORS.length)];
 
-        const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+    // Create sync instance
+    const sync = new RoomSync(
+      slug,
+      participantId,
+      handleStateChange,
+      handleConnectionChange
+    );
+    syncRef.current = sync;
 
-        const handle = await findOrCreateRoom(
-          slug,
-          participantId,
-          userName,
-          userEmoji,
-          color
-        );
+    // Create participant state
+    const participant: ParticipantState = {
+      id: participantId,
+      name: userName,
+      emoji: userEmoji,
+      color,
+      joinedAt: new Date().toISOString(),
+      lastSeen: new Date().toISOString(),
+      status: 'online',
+    };
 
-        if (!mounted) return;
+    // Join room
+    sync.join(participant);
 
-        handleRef.current = handle;
+    // Connect to sync server (if available)
+    // For now, runs in local-only mode
+    const syncUrl = process.env.NEXT_PUBLIC_SYNC_URL;
+    sync.connect(syncUrl);
 
-        // Add this participant if not already in the room
-        const doc = handle.docSync();
-        if (doc && !doc.participants[participantId]) {
-          addParticipant(handle, {
-            id: participantId,
-            name: userName,
-            emoji: userEmoji,
-            color,
-            joinedAt: new Date().toISOString(),
-            lastSeen: new Date().toISOString(),
-            status: 'online',
-            privacySettings: {
-              sharingEnabled: true,
-              defaultPrecision: 'exact',
-              showIndoorFloor: true,
-              ghostMode: false,
-            },
-          });
-        }
-
-        // Subscribe to changes
-        handle.on('change', ({ doc }) => {
-          if (!mounted || !doc) return;
-          setParticipants(docToParticipants(doc));
-          setWaypoints(docToWaypoints(doc));
-          setRoomName(doc.name || slug);
-        });
-
-        // Initial state
-        const initialDoc = handle.docSync();
-        if (initialDoc) {
-          setParticipants(docToParticipants(initialDoc));
-          setWaypoints(docToWaypoints(initialDoc));
-          setRoomName(initialDoc.name || slug);
-        }
-
-        setIsConnected(true);
-        setIsLoading(false);
-      } catch (e) {
-        if (!mounted) return;
-        console.error('Failed to connect to room:', e);
-        setError('Failed to connect to room');
-        setIsLoading(false);
-      }
-    }
-
-    init();
+    setIsLoading(false);
 
     return () => {
-      mounted = false;
-      // Leave room on unmount
-      if (handleRef.current && participantIdRef.current) {
-        updateParticipantStatus(handleRef.current, participantIdRef.current, 'offline');
-      }
+      sync.leave();
+      syncRef.current = null;
     };
-  }, [slug, userName, userEmoji, docToParticipants, docToWaypoints]);
+  }, [slug, userName, userEmoji, handleStateChange, handleConnectionChange]);
 
   // Update location
   const updateLocation = useCallback((location: ParticipantLocation) => {
-    if (!handleRef.current || !participantIdRef.current) return;
+    if (!syncRef.current) return;
 
-    updateParticipantLocation(handleRef.current, participantIdRef.current, {
+    const locationState: LocationState = {
       latitude: location.latitude,
       longitude: location.longitude,
       accuracy: location.accuracy,
@@ -199,49 +131,50 @@ export function useRoom({ slug, userName, userEmoji }: UseRoomOptions): UseRoomR
       timestamp: location.timestamp.toISOString(),
       source: location.source,
       indoor: location.indoor,
-    });
+    };
+
+    syncRef.current.updateLocation(locationState);
   }, []);
 
   // Set status
   const setStatus = useCallback((status: Participant['status']) => {
-    if (!handleRef.current || !participantIdRef.current) return;
-    updateParticipantStatus(handleRef.current, participantIdRef.current, status);
+    if (!syncRef.current) return;
+    syncRef.current.updateStatus(status);
   }, []);
 
   // Add waypoint
   const addWaypoint = useCallback(
     (waypoint: Omit<Waypoint, 'id' | 'createdAt' | 'createdBy'>) => {
-      if (!handleRef.current || !participantIdRef.current) return;
+      if (!syncRef.current) return;
 
-      addWaypointToDoc(handleRef.current, {
+      const waypointState: WaypointState = {
         id: nanoid(),
         name: waypoint.name,
         emoji: waypoint.emoji,
-        location: {
-          latitude: waypoint.location.latitude,
-          longitude: waypoint.location.longitude,
-          indoor: waypoint.location.indoor,
-        },
+        latitude: waypoint.location.latitude,
+        longitude: waypoint.location.longitude,
+        indoor: waypoint.location.indoor,
         createdBy: participantIdRef.current,
         createdAt: new Date().toISOString(),
         type: waypoint.type,
-      });
+      };
+
+      syncRef.current.addWaypoint(waypointState);
     },
     []
   );
 
   // Remove waypoint
   const removeWaypoint = useCallback((waypointId: string) => {
-    if (!handleRef.current) return;
-    removeWaypointFromDoc(handleRef.current, waypointId);
+    if (!syncRef.current) return;
+    syncRef.current.removeWaypoint(waypointId);
   }, []);
 
   // Leave room
   const leave = useCallback(() => {
-    if (!handleRef.current || !participantIdRef.current) return;
-    removeParticipant(handleRef.current, participantIdRef.current);
-    handleRef.current = null;
-    participantIdRef.current = null;
+    if (!syncRef.current) return;
+    syncRef.current.leave();
+    syncRef.current = null;
     setIsConnected(false);
   }, []);
 

@@ -11,11 +11,6 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@automerge/automerge": "^2.2.8",
-    "@automerge/automerge-repo": "^1.2.1",
-    "@automerge/automerge-repo-network-websocket": "^1.2.1",
-    "@automerge/automerge-repo-react-hooks": "^1.2.1",
-    "@automerge/automerge-repo-storage-indexeddb": "^1.2.1",
     "maplibre-gl": "^5.0.0",
     "nanoid": "^5.0.9",
     "next": "^14.2.28",
