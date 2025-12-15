@@ -11,21 +11,14 @@ services:
       - NODE_ENV=production
       - PORT=3000
     labels:
-      # Traefik routing
       - "traefik.enable=true"
-      # Main domain
       - "traefik.http.routers.rmaps.rule=Host(`rmaps.online`) || Host(`www.rmaps.online`)"
-      - "traefik.http.routers.rmaps.entrypoints=web,websecure"
+      - "traefik.http.routers.rmaps.entrypoints=web"
       - "traefik.http.services.rmaps.loadbalancer.server.port=3000"
-      # Wildcard subdomain routing (*.rmaps.online)
-      - "traefik.http.routers.rmaps-subdomain.rule=HostRegexp(`{subdomain:[a-z0-9-]+}.rmaps.online`)"
-      - "traefik.http.routers.rmaps-subdomain.entrypoints=web,websecure"
-      - "traefik.http.routers.rmaps-subdomain.service=rmaps"
-      - "traefik.http.routers.rmaps-subdomain.priority=1"
     networks:
       - traefik-public
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
