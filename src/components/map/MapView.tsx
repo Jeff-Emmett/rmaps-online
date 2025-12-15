@@ -101,6 +101,11 @@ export default function MapView({
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
+    console.log('MapView: Updating markers for', participants.length, 'participants');
+    participants.forEach((p) => {
+      console.log('  -', p.name, p.id, 'location:', p.location ? `${p.location.latitude}, ${p.location.longitude}` : 'none');
+    });
+
     const currentMarkers = markersRef.current;
     const participantIds = new Set(participants.map((p) => p.id));
 

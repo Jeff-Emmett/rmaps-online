@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useRoom } from '@/hooks/useRoom';
@@ -8,7 +8,7 @@ import { useLocationSharing } from '@/hooks/useLocationSharing';
 import ParticipantList from '@/components/room/ParticipantList';
 import RoomHeader from '@/components/room/RoomHeader';
 import ShareModal from '@/components/room/ShareModal';
-import type { Participant } from '@/types';
+import type { Participant, ParticipantLocation } from '@/types';
 
 // Dynamic import for map to avoid SSR issues with MapLibre
 const DualMapView = dynamic(() => import('@/components/map/DualMapView'), {
@@ -61,6 +61,26 @@ export default function RoomPage() {
     userEmoji: currentUser?.emoji || '👤',
   });
 
+  // Use refs to avoid stale closures in callbacks
+  const isConnectedRef = useRef(isConnected);
+  const updateLocationRef = useRef(updateLocation);
+
+  useEffect(() => {
+    isConnectedRef.current = isConnected;
+  }, [isConnected]);
+
+  useEffect(() => {
+    updateLocationRef.current = updateLocation;
+  }, [updateLocation]);
+
+  // Stable callback that always uses latest refs
+  const handleLocationUpdate = useCallback((location: ParticipantLocation) => {
+    console.log('Location update received:', location.latitude, location.longitude, 'connected:', isConnectedRef.current);
+    if (isConnectedRef.current) {
+      updateLocationRef.current(location);
+    }
+  }, []);
+
   // Location sharing hook
   const {
     isSharing,
@@ -68,11 +88,7 @@ export default function RoomPage() {
     startSharing,
     stopSharing,
   } = useLocationSharing({
-    onLocationUpdate: (location) => {
-      if (isConnected) {
-        updateLocation(location);
-      }
-    },
+    onLocationUpdate: handleLocationUpdate,
     updateInterval: 5000,
     highAccuracy: true,
   });

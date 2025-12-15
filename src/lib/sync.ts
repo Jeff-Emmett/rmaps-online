@@ -269,11 +269,15 @@ export class RoomSync {
   }
 
   updateLocation(location: LocationState): void {
+    console.log('RoomSync.updateLocation called:', location.latitude, location.longitude);
     if (this.state.participants[this.participantId]) {
       this.state.participants[this.participantId].location = location;
       this.state.participants[this.participantId].lastSeen = new Date().toISOString();
       this.send({ type: 'location', participantId: this.participantId, location });
+      console.log('Location set for participant:', this.participantId, 'Total participants:', Object.keys(this.state.participants).length);
       this.notifyStateChange();
+    } else {
+      console.warn('Cannot update location - participant not found:', this.participantId);
     }
   }
 
