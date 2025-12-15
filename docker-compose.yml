@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  rmaps:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rmaps-online
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    labels:
+      # Traefik routing
+      - "traefik.enable=true"
+      # Main domain
+      - "traefik.http.routers.rmaps.rule=Host(`rmaps.online`) || Host(`www.rmaps.online`)"
+      - "traefik.http.routers.rmaps.entrypoints=web,websecure"
+      - "traefik.http.services.rmaps.loadbalancer.server.port=3000"
+      # Wildcard subdomain routing (*.rmaps.online)
+      - "traefik.http.routers.rmaps-subdomain.rule=HostRegexp(`{subdomain:[a-z0-9-]+}.rmaps.online`)"
+      - "traefik.http.routers.rmaps-subdomain.entrypoints=web,websecure"
+      - "traefik.http.routers.rmaps-subdomain.service=rmaps"
+      - "traefik.http.routers.rmaps-subdomain.priority=1"
+    networks:
+      - traefik-public
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  traefik-public:
+    external: true
