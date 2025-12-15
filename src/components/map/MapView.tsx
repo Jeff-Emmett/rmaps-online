@@ -77,7 +77,7 @@ export default function MapView({
         },
         trackUserLocation: true,
         showUserHeading: true,
-      }),
+      } as maplibregl.GeolocateControlOptions),
       'top-right'
     );
     map.current.addControl(new maplibregl.ScaleControl(), 'bottom-left');

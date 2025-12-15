@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { useRoomStore } from '@/stores/room';
+import { useRoom } from '@/hooks/useRoom';
 import { useLocationSharing } from '@/hooks/useLocationSharing';
 import ParticipantList from '@/components/room/ParticipantList';
 import RoomHeader from '@/components/room/RoomHeader';
@@ -11,7 +11,7 @@ import ShareModal from '@/components/room/ShareModal';
 import type { Participant } from '@/types';
 
 // Dynamic import for map to avoid SSR issues with MapLibre
-const MapView = dynamic(() => import('@/components/map/MapView'), {
+const DualMapView = dynamic(() => import('@/components/map/DualMapView'), {
   ssr: false,
   loading: () => (
     <div className="w-full h-full bg-rmaps-dark flex items-center justify-center">
@@ -22,70 +22,136 @@ const MapView = dynamic(() => import('@/components/map/MapView'), {
 
 export default function RoomPage() {
   const params = useParams();
+  const router = useRouter();
   const slug = params.slug as string;
 
   const [showShare, setShowShare] = useState(false);
   const [showParticipants, setShowParticipants] = useState(true);
   const [currentUser, setCurrentUser] = useState<{ name: string; emoji: string } | null>(null);
+  const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
 
-  const {
-    room,
-    participants,
-    isConnected,
-    error,
-    joinRoom,
-    leaveRoom,
-    updateParticipant,
-  } = useRoomStore();
-
-  const { isSharing, startSharing, stopSharing, currentLocation } = useLocationSharing({
-    onLocationUpdate: (location) => {
-      if (currentUser) {
-        updateParticipant({ location });
-      }
-    },
-  });
-
-  // Load user from localStorage and join room
+  // Load user from localStorage
   useEffect(() => {
     const stored = localStorage.getItem('rmaps_user');
     if (stored) {
-      const user = JSON.parse(stored);
-      setCurrentUser(user);
-      joinRoom(slug, user.name, user.emoji);
+      setCurrentUser(JSON.parse(stored));
     } else {
       // Redirect to home if no user info
-      window.location.href = '/';
+      router.push('/');
     }
+  }, [router]);
 
-    return () => {
-      leaveRoom();
-    };
-  }, [slug, joinRoom, leaveRoom]);
+  // Room hook (only initialize when we have user info)
+  const {
+    isConnected,
+    isLoading,
+    error,
+    participants,
+    waypoints,
+    currentParticipantId,
+    roomName,
+    updateLocation,
+    setStatus,
+    addWaypoint,
+    removeWaypoint,
+    leave,
+  } = useRoom({
+    slug,
+    userName: currentUser?.name || '',
+    userEmoji: currentUser?.emoji || '👤',
+  });
 
-  // Auto-start location sharing when joining
+  // Location sharing hook
+  const {
+    isSharing,
+    currentLocation,
+    startSharing,
+    stopSharing,
+  } = useLocationSharing({
+    onLocationUpdate: (location) => {
+      if (isConnected) {
+        updateLocation(location);
+      }
+    },
+    updateInterval: 5000,
+    highAccuracy: true,
+  });
+
+  // Auto-start location sharing when connected
   useEffect(() => {
     if (isConnected && currentUser && !isSharing) {
       startSharing();
     }
   }, [isConnected, currentUser, isSharing, startSharing]);
 
+  // Update status when app goes to background
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.hidden) {
+        setStatus('away');
+      } else {
+        setStatus('online');
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [setStatus]);
+
+  // Handle leaving room
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      leave();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      leave();
+    };
+  }, [leave]);
+
+  // Navigate to participant
+  const handleNavigateTo = (participant: Participant) => {
+    setSelectedParticipant(participant);
+    // TODO: Implement navigation route display
+    console.log('Navigate to:', participant.name);
+  };
+
+  // Loading state
+  if (!currentUser || isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-rmaps-dark">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-rmaps-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <div className="text-white/60">Joining room...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center p-4 bg-rmaps-dark">
         <div className="room-panel rounded-2xl p-6 max-w-md text-center">
-          <h2 className="text-xl font-bold text-red-400 mb-2">Error</h2>
+          <h2 className="text-xl font-bold text-red-400 mb-2">Connection Error</h2>
           <p className="text-white/60 mb-4">{error}</p>
-          <a href="/" className="btn-primary inline-block">
-            Go Home
-          </a>
+          <div className="flex gap-3 justify-center">
+            <button onClick={() => window.location.reload()} className="btn-ghost">
+              Retry
+            </button>
+            <a href="/" className="btn-primary">
+              Go Home
+            </a>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen w-screen flex flex-col overflow-hidden">
+    <div className="h-screen w-screen flex flex-col overflow-hidden bg-rmaps-dark">
       {/* Header */}
       <RoomHeader
         roomSlug={slug}
@@ -99,21 +165,33 @@ export default function RoomPage() {
       {/* Main Content */}
       <div className="flex-1 relative">
         {/* Map */}
-        <MapView
+        <DualMapView
           participants={participants}
-          currentUserId={room?.participants ? Array.from(room.participants.keys())[0] : undefined}
-          onParticipantClick={(p) => console.log('Clicked participant:', p)}
+          currentUserId={currentParticipantId || undefined}
+          currentLocation={currentLocation}
+          eventId="38c3"
+          onParticipantClick={(p) => {
+            setSelectedParticipant(p);
+            setShowParticipants(true);
+          }}
         />
 
-        {/* Participant Panel (mobile: bottom sheet, desktop: sidebar) */}
+        {/* Participant Panel */}
         {showParticipants && (
-          <div className="absolute bottom-0 left-0 right-0 md:top-0 md:right-auto md:w-80 md:bottom-auto md:h-full">
+          <div className="absolute bottom-0 left-0 right-0 md:top-0 md:right-auto md:w-80 md:bottom-auto md:h-full z-20">
             <ParticipantList
               participants={participants}
-              currentUserId={currentUser?.name}
+              currentUserId={currentUser.name}
               onClose={() => setShowParticipants(false)}
-              onNavigateTo={(p) => console.log('Navigate to:', p)}
+              onNavigateTo={handleNavigateTo}
             />
+          </div>
+        )}
+
+        {/* Connection status indicator */}
+        {!isConnected && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-yellow-500/90 text-black text-sm px-3 py-1.5 rounded-full z-30">
+            Reconnecting...
           </div>
         )}
       </div>
