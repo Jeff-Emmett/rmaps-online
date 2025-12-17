@@ -302,6 +302,37 @@ export class RoomSync {
     }
   }
 
+  updateIndoorPosition(indoor: { level: number; x: number; y: number }): void {
+    console.log('RoomSync.updateIndoorPosition called:', indoor.level, indoor.x, indoor.y);
+    if (this.state.participants[this.participantId]) {
+      // Update or create location with indoor data
+      const existingLocation = this.state.participants[this.participantId].location;
+      const location: LocationState = existingLocation || {
+        latitude: 0,
+        longitude: 0,
+        accuracy: 0,
+        timestamp: new Date().toISOString(),
+        source: 'manual',
+      };
+
+      location.indoor = {
+        level: indoor.level,
+        x: indoor.x,
+        y: indoor.y,
+      };
+      location.timestamp = new Date().toISOString();
+      location.source = 'manual';
+
+      this.state.participants[this.participantId].location = location;
+      this.state.participants[this.participantId].lastSeen = new Date().toISOString();
+      this.send({ type: 'location', participantId: this.participantId, location });
+      console.log('Indoor position set for participant:', this.participantId);
+      this.notifyStateChange();
+    } else {
+      console.warn('Cannot update indoor position - participant not found:', this.participantId);
+    }
+  }
+
   addWaypoint(waypoint: WaypointState): void {
     this.state.waypoints.push(waypoint);
     this.send({ type: 'waypoint_add', waypoint });

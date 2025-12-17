@@ -11,7 +11,7 @@ const MapView = dynamic(() => import('./MapView'), {
   loading: () => <MapLoading />,
 });
 
-const C3NavEmbed = dynamic(() => import('./C3NavEmbed'), {
+const IndoorMapView = dynamic(() => import('./IndoorMapView'), {
   ssr: false,
   loading: () => <MapLoading />,
 });
@@ -35,6 +35,7 @@ interface DualMapViewProps {
   initialMode?: MapMode;
   onParticipantClick?: (participant: Participant) => void;
   onWaypointClick?: (waypoint: Waypoint) => void;
+  onIndoorPositionSet?: (position: { level: number; x: number; y: number }) => void;
 }
 
 // CCC venue bounds (Hamburg Congress Center)
@@ -54,6 +55,7 @@ export default function DualMapView({
   initialMode = 'auto',
   onParticipantClick,
   onWaypointClick,
+  onIndoorPositionSet,
 }: DualMapViewProps) {
   const [mode, setMode] = useState<MapMode>(initialMode);
   const [activeView, setActiveView] = useState<'outdoor' | 'indoor'>('outdoor');
@@ -96,21 +98,20 @@ export default function DualMapView({
           onWaypointClick={onWaypointClick}
         />
       ) : (
-        <C3NavEmbed
+        <IndoorMapView
           eventId={eventId}
           participants={participants}
           currentUserId={currentUserId}
-          onToggleOutdoor={goOutdoor}
-          showToggle={true}
+          onParticipantClick={onParticipantClick}
+          onSwitchToOutdoor={goOutdoor}
+          onPositionSet={onIndoorPositionSet}
         />
       )}
 
-      {/* Indoor Map button - opens c3nav in new tab (iframe embedding blocked) */}
+      {/* Indoor Map button - switch to indoor view */}
       {activeView === 'outdoor' && (
-        <a
-          href={`https://${eventId}.c3nav.de`}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          onClick={goIndoor}
           className="absolute bottom-4 left-4 bg-rmaps-dark/90 text-white px-3 py-2 rounded-lg text-sm hover:bg-rmaps-dark transition-colors flex items-center gap-2 z-30"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -122,10 +123,7 @@ export default function DualMapView({
             />
           </svg>
           Indoor Map
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-          </svg>
-        </a>
+        </button>
       )}
 
       {/* Auto-mode indicator */}

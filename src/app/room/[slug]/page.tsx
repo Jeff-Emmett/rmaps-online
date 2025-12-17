@@ -53,6 +53,7 @@ export default function RoomPage() {
     currentParticipantId,
     roomName,
     updateLocation,
+    updateIndoorPosition,
     clearLocation,
     setStatus,
     addWaypoint,
@@ -214,6 +215,7 @@ export default function RoomPage() {
           onWaypointClick={(w) => {
             console.log('Waypoint clicked:', w.name);
           }}
+          onIndoorPositionSet={updateIndoorPosition}
         />
 
         {/* Participant Panel */}

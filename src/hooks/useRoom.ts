@@ -42,6 +42,7 @@ interface UseRoomReturn {
   currentParticipantId: string | null;
   roomName: string;
   updateLocation: (location: ParticipantLocation) => void;
+  updateIndoorPosition: (position: { level: number; x: number; y: number }) => void;
   clearLocation: () => void;
   setStatus: (status: Participant['status']) => void;
   addWaypoint: (waypoint: Omit<Waypoint, 'id' | 'createdAt' | 'createdBy'>) => void;
@@ -74,7 +75,11 @@ export function useRoom({ slug, userName, userEmoji }: UseRoomOptions): UseRoomR
 
   // Initialize room connection
   useEffect(() => {
-    if (!userName) return;
+    if (!userName) {
+      // No user yet - not loading, just waiting
+      setIsLoading(false);
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
@@ -143,6 +148,12 @@ export function useRoom({ slug, userName, userEmoji }: UseRoomOptions): UseRoomR
     syncRef.current.clearLocation();
   }, []);
 
+  // Update indoor position (from c3nav map tap)
+  const updateIndoorPosition = useCallback((position: { level: number; x: number; y: number }) => {
+    if (!syncRef.current) return;
+    syncRef.current.updateIndoorPosition(position);
+  }, []);
+
   // Set status
   const setStatus = useCallback((status: Participant['status']) => {
     if (!syncRef.current) return;
@@ -194,6 +205,7 @@ export function useRoom({ slug, userName, userEmoji }: UseRoomOptions): UseRoomR
     currentParticipantId: participantIdRef.current,
     roomName,
     updateLocation,
+    updateIndoorPosition,
     clearLocation,
     setStatus,
     addWaypoint,
